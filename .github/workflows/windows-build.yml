@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
 
@@ -23,7 +24,7 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
           architecture: x64
 
       - name: Verify Python
@@ -125,8 +126,7 @@ jobs:
           }
           $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODE_SIGN_CERT))
-          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Select-Object -First 1
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'x64\\signtool.exe$' } | Select-Object -First 1
           if (-not $signtool) { throw 'signtool.exe not found' }
           & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:CODE_SIGN_PASSWORD $exe
           if ($LASTEXITCODE -ne 0) { throw 'signtool sign failed' }
@@ -144,25 +144,24 @@ jobs:
           $status = '${{ steps.sign.outputs.status }}'
           if (-not $status) { $status = 'UNSIGNED - READY FOR SIGNING' }
           $outDir = Split-Path $exe
-          $hashFile = Join-Path $outDir 'AhamdCode.exe.sha256.txt'
-          Set-Content -Path $hashFile -Value "$sha  AhamdCode.exe" -Encoding ascii
+          Set-Content -Path (Join-Path $outDir 'AhamdCode.exe.sha256.txt') -Value "$sha  AhamdCode.exe" -Encoding ascii
           $py = python -c "import sys; print(sys.version.split()[0])"
-          $torch = python -c "import torch; print(torch.__version__)"
-          $info = @"
-Application: AhamdCode
-Version: 0.1 Mini
-Platform: Windows x64
-Python Version: $py
-PyTorch Version: $torch
-Build Date: $(Get-Date -Format o)
-Git Commit: ${{ github.sha }}
-EXE Size: $size
-SHA256: $sha
-Code Signing Status: $status
-Test Result: pytest passed
-"@
-          Set-Content -Path (Join-Path $outDir 'BUILD_INFO.txt') -Value $info -Encoding utf8
-          Write-Host $info
+          $torchv = python -c "import torch; print(torch.__version__)"
+          $lines = @(
+            'Application: AhamdCode',
+            'Version: 0.1 Mini',
+            'Platform: Windows x64',
+            "Python Version: $py",
+            "PyTorch Version: $torchv",
+            "Build Date: $(Get-Date -Format o)",
+            'Git Commit: ${{ github.sha }}',
+            "EXE Size: $size",
+            "SHA256: $sha",
+            "Code Signing Status: $status",
+            'Test Result: pytest passed'
+          )
+          Set-Content -Path (Join-Path $outDir 'BUILD_INFO.txt') -Value $lines -Encoding utf8
+          $lines | ForEach-Object { Write-Host $_ }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -173,7 +172,6 @@ Test Result: pytest passed
             dist/AhamdCode/AhamdCode.exe.sha256.txt
             dist/AhamdCode/BUILD_INFO.txt
             dist/AhamdCode/**
-            dist/AhamdCode.exe
           if-no-files-found: error
           retention-days: 14
 
