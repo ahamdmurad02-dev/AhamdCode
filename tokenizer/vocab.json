@@ -1,0 +1,4 @@
+{
+  "tokens": ["<pad>", "<bos>", "<eos>", "<unk>", "def", "add", "a", "b", "return", "(", ")", ":", "+", " ", "\n"],
+  "special": ["<pad>", "<bos>", "<eos>", "<unk>"]
+}

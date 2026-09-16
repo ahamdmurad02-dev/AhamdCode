@@ -1,0 +1,5 @@
+{
+  "type": "ahamdcode-bpe",
+  "vocab_file": "vocab.json",
+  "merges_file": "merges.json"
+}
