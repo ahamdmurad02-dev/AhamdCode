@@ -37,7 +37,9 @@ jobs:
           python app.py status
           python app.py help
           python app.py model
-          if ($LASTEXITCODE -ne 1) { throw "python app.py model must return 1 when no checkpoint exists" }
+          $modelExit = $LASTEXITCODE
+          if ($modelExit -ne 1) { throw "python app.py model must return 1 when no checkpoint exists; got $modelExit" }
+          $global:LASTEXITCODE = 0
 
       - name: Build optional C++ helper
         shell: pwsh
