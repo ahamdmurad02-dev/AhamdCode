@@ -1,0 +1,50 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PySide6 pyinstaller pytest psutil
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Tests
+        shell: pwsh
+        run: python -m pytest -q tests
+
+      - name: Create checkpoint if missing
+        shell: pwsh
+        run: |
+          if (-not (Test-Path models\AhamdCode_0.1_Mini.pt)) {
+            python app.py create-model
+          }
+          python app.py status
+
+      - name: Package EXE
+        shell: pwsh
+        run: python -m PyInstaller --noconfirm --clean AhamdCode.spec
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: AhamdCode-windows-exe
+          path: dist/AhamdCode/
+          if-no-files-found: error
+          retention-days: 14

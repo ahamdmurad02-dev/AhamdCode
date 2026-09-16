@@ -8,29 +8,27 @@ Local Windows desktop coding assistant.
 
 This is a **small** model (Mini Default is about 1.1M parameters).
 
-## Clone
+## Download the Windows EXE from GitHub
+
+1. Open [Actions](https://github.com/ahamdmurad02-dev/AhamdCode/actions)
+2. Open the latest **Build Windows EXE** run
+3. Download artifact **AhamdCode-windows-exe**
+4. Unzip and run `AhamdCode.exe`
+
+You can also start the build yourself: Actions → Build Windows EXE → Run workflow.
+
+## Run from source (no EXE)
 
 ```
-git clone https://github.com/ahamdmurad02-dev/AhamdCode.git
-cd AhamdCode
-```
-
-## Run GUI
-
-```
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
+python app.py status
 python app.py
 ```
 
-## Windows EXE
-
-On Windows 10/11 x64 double-click `CREATE_EXE.bat`.
-Output: `dist\\AhamdCode\\AhamdCode.exe`
-
-## CLI
+## Windows local build
 
 ```
-python app.py status
-python app.py train --data datasets/seed --steps 30
-python app.py generate --prompt "def add(a, b):" --max-tokens 32
+CREATE_EXE.bat
 ```
+
+Output: `dist\AhamdCode\AhamdCode.exe`
