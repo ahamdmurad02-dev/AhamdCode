@@ -1,0 +1,195 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-exe:
+    name: Build AhamdCode.exe
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Verify Python
+        shell: pwsh
+        run: |
+          python --version
+          python -c "import sys; assert sys.version_info[:2] == (3, 12)"
+          python -c "import struct; assert struct.calcsize('P') * 8 == 64"
+
+      - name: Install project dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Verify PySide6, PyTorch, PyInstaller
+        shell: pwsh
+        run: |
+          python -c "import PySide6, torch, PyInstaller, sys; print('Python', sys.version); print('PySide6', PySide6.__version__); print('PyTorch', torch.__version__); print('PyInstaller', PyInstaller.__version__)"
+
+      - name: Verify CMake
+        shell: pwsh
+        run: |
+          cmake --version
+          if ($LASTEXITCODE -ne 0) { throw 'CMake is required' }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          python -m pytest -q --tb=short
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+
+      - name: Build C++ helper
+        shell: pwsh
+        run: |
+          if (-not (Test-Path CMakeLists.txt)) { throw 'CMakeLists.txt missing' }
+          if (-not (Test-Path cpp)) { Write-Host 'cpp sources missing; skip compile'; exit 0 }
+          cmake -S . -B build_cpp -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
+          cmake --build build_cpp --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'C++ build failed' }
+
+      - name: CLI sanity
+        shell: pwsh
+        run: |
+          python app.py status
+          python app.py help
+          python app.py model
+
+      - name: PyInstaller package
+        shell: pwsh
+        run: |
+          if (Test-Path build) { Remove-Item -Recurse -Force build }
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+          python -m PyInstaller --noconfirm --clean AhamdCode.spec
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+
+      - name: Locate and inspect EXE
+        id: exe
+        shell: pwsh
+        run: |
+          $candidates = @('dist\AhamdCode.exe','dist\AhamdCode\AhamdCode.exe')
+          $exe = $null
+          foreach ($c in $candidates) { if (Test-Path $c) { $exe = (Resolve-Path $c).Path; break } }
+          if (-not $exe) { throw 'AhamdCode.exe was not produced' }
+          $item = Get-Item $exe
+          if ($item.Length -le 0) { throw 'EXE size is zero' }
+          $mz = [System.Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe)[0..1])
+          if ($mz -ne 'MZ') { throw 'Not a PE executable' }
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          echo "exe=$exe" >> $env:GITHUB_OUTPUT
+          echo "size=$($item.Length)" >> $env:GITHUB_OUTPUT
+          echo "sha=$sha" >> $env:GITHUB_OUTPUT
+          Write-Host "EXE $exe SIZE $($item.Length) SHA256 $sha"
+
+      - name: Smoke test EXE
+        shell: pwsh
+        run: |
+          $exe = '${{ steps.exe.outputs.exe }}'
+          $proc = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 8
+          if ($proc.HasExited -and $proc.ExitCode -ne 0) { throw "EXE exited $($proc.ExitCode)" }
+          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          Write-Host 'Smoke test: process started'
+
+      - name: Optional Authenticode signing
+        id: sign
+        shell: pwsh
+        env:
+          CODE_SIGN_CERT: ${{ secrets.CODE_SIGN_CERT }}
+          CODE_SIGN_PASSWORD: ${{ secrets.CODE_SIGN_PASSWORD }}
+        run: |
+          $exe = '${{ steps.exe.outputs.exe }}'
+          if ([string]::IsNullOrWhiteSpace($env:CODE_SIGN_CERT) -or [string]::IsNullOrWhiteSpace($env:CODE_SIGN_PASSWORD)) {
+            echo 'status=UNSIGNED - READY FOR SIGNING' >> $env:GITHUB_OUTPUT
+            Write-Host 'No signing secrets configured'
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODE_SIGN_CERT))
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found' }
+          & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:CODE_SIGN_PASSWORD $exe
+          if ($LASTEXITCODE -ne 0) { throw 'signtool sign failed' }
+          & $signtool.FullName verify /pa /v $exe
+          if ($LASTEXITCODE -ne 0) { throw 'signature verify failed' }
+          echo 'status=Signed' >> $env:GITHUB_OUTPUT
+          Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+
+      - name: Write checksum and BUILD_INFO
+        shell: pwsh
+        run: |
+          $exe = '${{ steps.exe.outputs.exe }}'
+          $sha = '${{ steps.exe.outputs.sha }}'
+          $size = '${{ steps.exe.outputs.size }}'
+          $status = '${{ steps.sign.outputs.status }}'
+          if (-not $status) { $status = 'UNSIGNED - READY FOR SIGNING' }
+          $outDir = Split-Path $exe
+          $hashFile = Join-Path $outDir 'AhamdCode.exe.sha256.txt'
+          Set-Content -Path $hashFile -Value "$sha  AhamdCode.exe" -Encoding ascii
+          $py = python -c "import sys; print(sys.version.split()[0])"
+          $torch = python -c "import torch; print(torch.__version__)"
+          $info = @"
+Application: AhamdCode
+Version: 0.1 Mini
+Platform: Windows x64
+Python Version: $py
+PyTorch Version: $torch
+Build Date: $(Get-Date -Format o)
+Git Commit: ${{ github.sha }}
+EXE Size: $size
+SHA256: $sha
+Code Signing Status: $status
+Test Result: pytest passed
+"@
+          Set-Content -Path (Join-Path $outDir 'BUILD_INFO.txt') -Value $info -Encoding utf8
+          Write-Host $info
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AhamdCode-windows-x64
+          path: |
+            dist/AhamdCode/AhamdCode.exe
+            dist/AhamdCode/AhamdCode.exe.sha256.txt
+            dist/AhamdCode/BUILD_INFO.txt
+            dist/AhamdCode/**
+            dist/AhamdCode.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: AhamdCode 0.1 Mini
+          body: |
+            AhamdCode 0.1 Mini
+            Windows x64
+            Build: success
+            SHA-256: ${{ steps.exe.outputs.sha }}
+            Signing: ${{ steps.sign.outputs.status }}
+            Known limitations: Smart App Control and Defender SmartScreen may still warn until a public certificate and reputation exist. Signing is not Microsoft trust approval.
+          files: |
+            dist/AhamdCode/AhamdCode.exe
+            dist/AhamdCode/AhamdCode.exe.sha256.txt
+            dist/AhamdCode/BUILD_INFO.txt

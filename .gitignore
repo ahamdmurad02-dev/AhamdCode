@@ -1,0 +1,9 @@
+*.pfx
+*.p12
+*.key
+.env
+build/
+build_cpp/
+dist/
+__pycache__/
+*.pyc
