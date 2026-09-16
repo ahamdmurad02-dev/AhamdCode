@@ -1,7 +1,6 @@
 from __future__ import annotations
 import os, platform, sys
 from pathlib import Path
-import torch
 
 def _looks_like_root(path: Path) -> bool:
     return (path / "app.py").is_file() and (path / "ahamdcode").is_dir()
@@ -28,6 +27,10 @@ def cpu_info():
     return {"source": "python", "processor": platform.processor() or platform.machine(), "machine": platform.machine(), "system": platform.system(), "cores_logical": os.cpu_count() or 1}
 
 def device_info():
+    try:
+        import torch
+    except ImportError:
+        return {"torch": "not installed", "cuda_available": False, "cuda_device": None, "preferred": "cpu"}
     cuda = bool(torch.cuda.is_available())
     return {"torch": torch.__version__, "cuda_available": cuda, "cuda_device": torch.cuda.get_device_name(0) if cuda else None, "preferred": "cuda" if cuda else "cpu"}
 

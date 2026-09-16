@@ -12,10 +12,10 @@ This is a **small** model (Mini Default is about 1.1M parameters).
 
 1. Open [Actions](https://github.com/ahamdmurad02-dev/AhamdCode/actions)
 2. Open the latest **Build Windows EXE** run
-3. Download artifact **AhamdCode-windows-exe**
+3. Download artifact **AhamdCode-windows-x64**
 4. Unzip and run `AhamdCode.exe`
 
-You can also start the build yourself: Actions → Build Windows EXE → Run workflow.
+You can also start the build yourself: Actions → Build Windows EXE → Run workflow. The artifact contains the EXE, its SHA-256 file, and BUILD_INFO.txt.
 
 ## Run from source (no EXE)
 

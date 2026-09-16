@@ -1,6 +1,9 @@
 from __future__ import annotations
 import gc, os
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 try:
     import psutil
 except ImportError:
@@ -22,7 +25,8 @@ def apply_ram_safe_mode(enabled: bool, cpu_threads: int = 2) -> dict:
     if enabled:
         threads = max(1, min(cpu_threads, 2))
         os.environ["OMP_NUM_THREADS"] = str(threads)
-        torch.set_num_threads(threads)
+        if torch is not None:
+            torch.set_num_threads(threads)
         gc.collect()
         return {"enabled": True, "cpu_threads": threads}
     return {"enabled": False, "cpu_threads": cpu_threads}
