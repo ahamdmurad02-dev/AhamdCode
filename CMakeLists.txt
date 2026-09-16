@@ -1,24 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(ahamdcode_cpp LANGUAGES CXX)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_library(ahamdcode_cpp SHARED
-    cpp/bindings.cpp
-    cpp/dataset/scanner.cpp
-    cpp/tokenizer/token_stats.cpp
-    cpp/system/cpu_info.cpp
-)
+add_library(ahamdcode_cpp SHARED cpp/bindings.cpp cpp/dataset/scanner.cpp cpp/tokenizer/token_stats.cpp cpp/system/cpu_info.cpp)
 target_include_directories(ahamdcode_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
-
-set_target_properties(ahamdcode_cpp PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ahamdcode/native"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ahamdcode/native"
-    PREFIX ""
-)
-
+set_target_properties(ahamdcode_cpp PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ahamdcode/native" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ahamdcode/native" PREFIX "")
 if(WIN32)
     set_target_properties(ahamdcode_cpp PROPERTIES SUFFIX ".dll")
 endif()
